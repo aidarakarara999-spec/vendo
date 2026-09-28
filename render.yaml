@@ -2,7 +2,7 @@ services:
   - type: web
     name: vendo
     runtime: node
-    plan: 0.5c-512mb
+    plan: free
     buildCommand: npm install --no-audit --no-fund && npx prisma generate && npx prisma db push --accept-data-loss=false
     startCommand: npm start
     healthCheckPath: /api/health
@@ -24,7 +24,6 @@ services:
 
 databases:
   - name: vendo-db
-    plan: 0.5c-1g
-    diskSizeGB: 15
+    plan: free
     databaseName: vendo
     user: vendo
