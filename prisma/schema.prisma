@@ -1,0 +1,220 @@
+generator client { provider = "prisma-client-js" }
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+
+enum Role { SELLER ADMIN }
+enum OrderStatus { PENDING CONFIRMED PROCESSING SHIPPED DELIVERED CANCELLED }
+enum PaymentMethod { COD WAVE ORANGE_MONEY }
+enum PaymentStatus { PENDING PAID FAILED REFUNDED }
+enum DeliveryStatus { PENDING ASSIGNED IN_TRANSIT DELIVERED FAILED }
+enum SubscriptionPlan { FREE PRO BUSINESS }
+enum CouponType { PERCENT FIXED }
+
+model User {
+  id String @id @default(cuid())
+  email String @unique
+  passwordHash String
+  name String
+  phone String?
+  role Role @default(SELLER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store Store?
+  adminNotifications Notification[]
+}
+
+model Store {
+  id String @id @default(cuid())
+  name String
+  slug String @unique
+  description String?
+  phone String?
+  city String?
+  currency String @default("XOF")
+  logoUrl String?
+  primaryColor String @default("#111827")
+  ownerId String @unique
+  owner User @relation(fields:[ownerId], references:[id], onDelete:Cascade)
+  products Product[]
+  categories Category[]
+  customers Customer[]
+  orders Order[]
+  zones DeliveryZone[]
+  coupons Coupon[]
+  notifications Notification[]
+  subscription Subscription?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([ownerId])
+}
+
+model Category {
+  id String @id @default(cuid())
+  storeId String
+  name String
+  slug String
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  products Product[]
+  @@unique([storeId, slug])
+  @@index([storeId])
+}
+
+model Product {
+  id String @id @default(cuid())
+  storeId String
+  categoryId String?
+  name String
+  slug String
+  description String?
+  price Int
+  compareAt Int?
+  stock Int @default(0)
+  imageUrl String?
+  active Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  category Category? @relation(fields:[categoryId], references:[id], onDelete:SetNull)
+  orderItems OrderItem[]
+  variants ProductVariant[]
+  @@unique([storeId, slug])
+  @@index([storeId, active])
+}
+
+model Customer {
+  id String @id @default(cuid())
+  storeId String
+  name String
+  phone String
+  city String?
+  address String?
+  orders Order[]
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([storeId, phone])
+  @@index([storeId])
+}
+
+model Order {
+  id String @id @default(cuid())
+  storeId String
+  customerId String?
+  customerName String
+  customerPhone String
+  customerCity String?
+  customerAddress String?
+  subtotal Int
+  shippingFee Int @default(0)
+  discount Int @default(0)
+  total Int
+  status OrderStatus @default(PENDING)
+  paymentMethod PaymentMethod @default(COD)
+  paymentStatus PaymentStatus @default(PENDING)
+  deliveryStatus DeliveryStatus @default(PENDING)
+  trackingNumber String?
+  notes String?
+  inventoryRestored Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  customer Customer? @relation(fields:[customerId], references:[id], onDelete:SetNull)
+  items OrderItem[]
+  payments PaymentTransaction[]
+  @@index([storeId, createdAt])
+  @@index([customerPhone])
+}
+
+model OrderItem {
+  id String @id @default(cuid())
+  orderId String
+  productId String
+  name String
+  unitPrice Int
+  quantity Int
+  variantId String?
+  order Order @relation(fields:[orderId], references:[id], onDelete:Cascade)
+  product Product @relation(fields:[productId], references:[id], onDelete:Restrict)
+  variant ProductVariant? @relation(fields:[variantId], references:[id], onDelete:SetNull)
+}
+
+model ProductVariant {
+  id String @id @default(cuid())
+  productId String
+  name String
+  sku String?
+  price Int?
+  stock Int @default(0)
+  imageUrl String?
+  active Boolean @default(true)
+  product Product @relation(fields:[productId], references:[id], onDelete:Cascade)
+  orderItems OrderItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([productId, name])
+  @@index([productId, active])
+}
+
+model DeliveryZone {
+  id String @id @default(cuid())
+  storeId String
+  name String
+  fee Int
+  active Boolean @default(true)
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  @@index([storeId, active])
+}
+
+model PaymentTransaction {
+  id String @id @default(cuid())
+  orderId String
+  provider PaymentMethod
+  amount Int
+  status PaymentStatus @default(PENDING)
+  externalRef String?
+  webhookEventId String?
+  rawPayload String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  order Order @relation(fields:[orderId], references:[id], onDelete:Cascade)
+  @@index([orderId])
+  @@index([externalRef])
+}
+
+model Coupon {
+  id String @id @default(cuid())
+  storeId String
+  code String
+  type CouponType
+  value Int
+  minAmount Int @default(0)
+  maxUses Int?
+  uses Int @default(0)
+  active Boolean @default(true)
+  expiresAt DateTime?
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  @@unique([storeId, code])
+}
+
+model Notification {
+  id String @id @default(cuid())
+  storeId String?
+  userId String?
+  title String
+  message String
+  read Boolean @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  store Store? @relation(fields:[storeId], references:[id], onDelete:Cascade)
+  user User? @relation(fields:[userId], references:[id], onDelete:Cascade)
+  @@index([storeId, read])
+}
+
+model Subscription {
+  id String @id @default(cuid())
+  storeId String @unique
+  plan SubscriptionPlan @default(FREE)
+  status String @default("ACTIVE")
+  startedAt DateTime @default(now())
+  renewsAt DateTime?
+  store Store @relation(fields:[storeId], references:[id], onDelete:Cascade)
+}
